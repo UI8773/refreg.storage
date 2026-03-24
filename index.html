@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>冰箱食物管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f2ee; --surface: #ffffff; --surface2: #faf8f5;
+    --border: #e8e2d9; --text: #2a2420; --text2: #7a6f68;
+    --accent: #d64f2a; --warn: #e8a020; --safe: #4a9e6b;
+    --frozen: #3a82c4; --tag-bg: #ede8e2; --radius: 14px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.07);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 100px; }
+  .header { background: var(--text); color: var(--bg); padding: 20px 20px 16px; position: sticky; top: 0; z-index: 100; }
+  .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .header h1 { font-size: 20px; font-weight: 700; }
+  .summary-pill { background: var(--accent); color: white; border-radius: 30px; padding: 10px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .summary-pill .count { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; line-height: 1; }
+  .summary-pill .label { font-size: 12px; line-height: 1.3; opacity: 0.9; }
+  .tabs { display: flex; gap: 8px; padding: 14px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex-shrink: 0; padding: 7px 14px; border-radius: 20px; border: none; background: var(--tag-bg); color: var(--text2); font-family: 'Noto Sans TC', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .tab.active { background: var(--text); color: var(--bg); }
+  .section { padding: 16px 20px; }
+  .food-item { background: var(--surface); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow); border-left: 3px solid transparent; animation: slideIn 0.2s ease; }
+  @keyframes slideIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+  .food-item.urgent { border-left-color: var(--accent); }
+  .food-item.warn { border-left-color: var(--warn); }
+  .food-item.safe { border-left-color: var(--safe); }
+  .food-item.frozen-style { border-left-color: var(--frozen); }
+  .food-icon { font-size: 26px; flex-shrink: 0; }
+  .food-info { flex: 1; min-width: 0; }
+  .food-name { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+  .food-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .food-cat { font-size: 11px; color: var(--text2); background: var(--tag-bg); padding: 2px 8px; border-radius: 10px; }
+  .food-days { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; }
+  .food-days.urgent { color: var(--accent); } .food-days.warn { color: var(--warn); } .food-days.safe { color: var(--safe); } .food-days.frozen-style { color: var(--frozen); }
+  .food-delete { background: none; border: none; color: var(--border); font-size: 20px; cursor: pointer; padding: 4px; border-radius: 50%; flex-shrink: 0; }
+  .food-delete:active { color: var(--accent); }
+  .empty-state { text-align: center; color: var(--text2); padding: 40px 20px; font-size: 14px; }
+  .empty-icon { font-size: 40px; margin-bottom: 10px; }
+  .fab { position: fixed; bottom: 28px; right: 20px; width: 58px; height: 58px; border-radius: 50%; background: var(--text); color: var(--bg); font-size: 28px; border: none; cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .overlay { position: fixed; inset: 0; background: rgba(30,20,15,0.5); z-index: 300; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+  .overlay.show { opacity: 1; pointer-events: all; }
+  .sheet { background: var(--surface); border-radius: 24px 24px 0 0; width: 100%; max-height: 92vh; overflow-y: auto; padding: 0 0 40px; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.34,1.2,0.64,1); }
+  .overlay.show .sheet { transform: translateY(0); }
+  .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 14px auto 20px; }
+  .sheet-title { font-size: 18px; font-weight: 700; padding: 0 20px 16px; border-bottom: 1px solid var(--border); }
+  .sheet-section { padding: 18px 20px 0; }
+  .sheet-label { font-size: 12px; font-weight: 600; color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+  .cat-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 7px; }
+  .cat-btn { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 3px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); cursor: pointer; font-family: 'Noto Sans TC', sans-serif; }
+  .cat-btn .cat-emoji { font-size: 20px; } .cat-btn .cat-label { font-size: 10px; color: var(--text2); }
+  .cat-btn.active { border-color: var(--text); background: var(--text); } .cat-btn.active .cat-label { color: var(--bg); }
+  .food-input { width: 100%; padding: 13px 16px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-family: 'Noto Sans TC', sans-serif; font-size: 16px; color: var(--text); outline: none; }
+  .food-input:focus { border-color: var(--text); }
+  .quick-foods { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+  .quick-chip { padding: 6px 12px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface2); font-size: 13px; cursor: pointer; color: var(--text); font-family: 'Noto Sans TC', sans-serif; }
+  .quick-chip:active { background: var(--text); color: var(--bg); }
+  .default-hint { font-size: 11px; color: var(--safe); padding: 5px 10px; background: #f0faf4; border-radius: 8px; margin-bottom: 10px; display: none; }
+  .default-hint.show { display: block; }
+  .days-row { display: flex; gap: 7px; flex-wrap: wrap; }
+  .day-btn { flex: 1; min-width: calc(33% - 7px); padding: 12px 6px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'DM Mono', monospace; color: var(--text2); text-align: center; line-height: 1.4; }
+  .day-btn .day-sub { font-size: 10px; font-family: 'Noto Sans TC', sans-serif; font-weight: 400; display: block; margin-top: 2px; }
+  .day-btn.active { border-color: var(--accent); background: var(--accent); color: white; }
+  .cal-toggle { width: 100%; margin-top: 8px; padding: 12px 16px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface2); font-family: 'Noto Sans TC', sans-serif; font-size: 14px; color: var(--text2); cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; }
+  .cal-toggle.active { border-color: var(--accent); color: var(--text); background: #fff5f3; }
+  .date-input { width: 100%; margin-top: 8px; padding: 13px 16px; border-radius: 12px; border: 2px solid var(--accent); background: var(--surface); font-family: 'Noto Sans TC', sans-serif; font-size: 16px; color: var(--text); outline: none; display: none; }
+  .date-input.show { display: block; }
+  .add-confirm { margin: 22px 20px 0; width: calc(100% - 40px); padding: 16px; background: var(--text); color: var(--bg); border: none; border-radius: 14px; font-family: 'Noto Sans TC', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .add-confirm:disabled { opacity: 0.3; }
+  .summary-item { background: var(--surface2); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .summary-days-badge { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 8px; flex-shrink: 0; }
+  .badge-urgent { background: #fee; color: var(--accent); } .badge-warn { background: #fff3e0; color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-top"><h1>🧊 冰箱管理</h1></div>
+  <div class="summary-pill" onclick="openSummary()">
+    <div><div class="count" id="urgentCount">0</div><div class="label">項即將<br>到期</div></div>
+    <span style="font-size:13px;opacity:0.85">查看三天內 →</span>
+  </div>
+</div>
+<div class="tabs">
+  <button class="tab active" onclick="filterTab('all',this)">全部</button>
+  <button class="tab" onclick="filterTab('meat',this)">🥩 肉類</button>
+  <button class="tab" onclick="filterTab('veg',this)">🥬 蔬菜</button>
+  <button class="tab" onclick="filterTab('cooked',this)">🍱 熟食</button>
+  <button class="tab" onclick="filterTab('dairy',this)">🥛 乳製品</button>
+  <button class="tab" onclick="filterTab('fruit',this)">🍎 水果</button>
+  <button class="tab" onclick="filterTab('bread',this)">🍞 麵包</button>
+  <button class="tab" onclick="filterTab('frozen',this)">🧊 冷凍</button>
+  <button class="tab" onclick="filterTab('other',this)">📦 其他</button>
+</div>
+<div class="section"><div id="foodList"></div></div>
+<button class="fab" onclick="openAdd()">＋</button>
+<div class="overlay" id="addOverlay" onclick="closeOnBg(event,'addOverlay')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">新增食材</div>
+    <div class="sheet-section">
+      <div class="sheet-label">分類</div>
+      <div class="cat-grid">
+        <button class="cat-btn" data-cat="meat" onclick="selectCat(this)"><span class="cat-emoji">🥩</span><span class="cat-label">肉類</span></button>
+        <button class="cat-btn" data-cat="veg" onclick="selectCat(this)"><span class="cat-emoji">🥬</span><span class="cat-label">蔬菜</span></button>
+        <button class="cat-btn" data-cat="cooked" onclick="selectCat(this)"><span class="cat-emoji">🍱</span><span class="cat-label">熟食</span></button>
+        <button class="cat-btn" data-cat="dairy" onclick="selectCat(this)"><span class="cat-emoji">🥛</span><span class="cat-label">乳製品</span></button>
+        <button class="cat-btn" data-cat="fruit" onclick="selectCat(this)"><span class="cat-emoji">🍎</span><span class="cat-label">水果</span></button>
+        <button class="cat-btn" data-cat="leftover" onclick="selectCat(this)"><span class="cat-emoji">🍲</span><span class="cat-label">剩菜</span></button>
+        <button class="cat-btn" data-cat="bread" onclick="selectCat(this)"><span class="cat-emoji">🍞</span><span class="cat-label">麵包</span></button>
+        <button class="cat-btn" data-cat="frozen" onclick="selectCat(this)"><span class="cat-emoji">🧊</span><span class="cat-label">冷凍</span></button>
+        <button class="cat-btn" data-cat="drink" onclick="selectCat(this)"><span class="cat-emoji">🧃</span><span class="cat-label">飲料</span></button>
+        <button class="cat-btn" data-cat="other" onclick="selectCat(this)"><span class="cat-emoji">📦</span><span class="cat-label">其他</span></button>
+      </div>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-label">食材名稱</div>
+      <input class="food-input" id="foodNameInput" placeholder="輸入名稱…" oninput="checkReady()" />
+      <div class="quick-foods" id="quickFoods"></div>
+    </div>
+    <div class="sheet-section">
+      <div class="sheet-label">到期時間</div>
+      <div class="default-hint" id="defaultHint"></div>
+      <div class="days-row">
+        <button class="day-btn" data-days="1" onclick="selectDays(this)">今天<span class="day-sub">1天</span></button>
+        <button class="day-btn" data-days="2" onclick="selectDays(this)">明天<span class="day-sub">2天</span></button>
+        <button class="day-btn" data-days="3" onclick="selectDays(this)">後天<span class="day-sub">3天</span></button>
+        <button class="day-btn" data-days="7" onclick="selectDays(this)">一週<span class="day-sub">7天</span></button>
+        <button class="day-btn" data-days="30" onclick="selectDays(this)">一個月<span class="day-sub">30天</span></button>
+      </div>
+      <button class="cal-toggle" id="calToggle" onclick="toggleCal()"><span>📅</span><span id="calLabel">自訂日期</span></button>
+      <input type="date" class="date-input" id="dateInput" onchange="selectDate()" />
+    </div>
+    <button class="add-confirm" id="addConfirmBtn" onclick="addFood()" disabled>加入冰箱</button>
+  </div>
+</div>
+<div class="overlay" id="summaryOverlay" onclick="closeOnBg(event,'summaryOverlay')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">⚠️ 三天內到期</div>
+    <div class="sheet-section" id="summaryList"></div>
+  </div>
+</div>
+<script>
+const CATS = {
+  meat:{emoji:'🥩',label:'肉類',defaultDays:null,quick:['雞肉','豬肉','牛肉','魚','蝦','培根','豬排','雞胸']},
+  veg:{emoji:'🥬',label:'蔬菜',defaultDays:null,quick:['高麗菜','菠菜','豆腐','蔥','蒜','紅蘿蔔','花椰菜','番茄']},
+  cooked:{emoji:'🍱',label:'熟食',defaultDays:2,quick:['便當','炒飯','湯','麵','水餃','炒菜']},
+  dairy:{emoji:'🥛',label:'乳製品',defaultDays:null,quick:['牛奶','優格','起司','奶油','雞蛋']},
+  fruit:{emoji:'🍎',label:'水果',defaultDays:null,quick:['蘋果','香蕉','葡萄','草莓','芒果','西瓜']},
+  leftover:{emoji:'🍲',label:'剩菜',defaultDays:2,quick:['剩飯','剩湯','滷味','剩菜','炒飯']},
+  bread:{emoji:'🍞',label:'麵包',defaultDays:7,quick:['吐司','法棍','貝果','餐包','可頌','饅頭','蛋糕']},
+  frozen:{emoji:'🧊',label:'冷凍',defaultDays:30,quick:['冷凍水餃','冷凍肉','冰淇淋','毛豆','冷凍蔬菜','湯圓','魚餃']},
+  drink:{emoji:'🧃',label:'飲料',defaultDays:null,quick:['豆漿','果汁','汽水','茶','咖啡']},
+  other:{emoji:'📦',label:'其他',defaultDays:null,quick:['醬料','調味料','零食']},
+};
+let foods=JSON.parse(localStorage.getItem('fridgeFoods2')||'[]');
+let selectedCat=null,selectedDays=null,calOpen=false,currentTab='all';
+function save(){localStorage.setItem('fridgeFoods2',JSON.stringify(foods));}
+function daysLeft(e){return Math.ceil((e-Date.now())/86400000);}
+function statusClass(d){if(d<=1)return'urgent';if(d<=3)return'warn';if(d>14)return'frozen-style';return'safe';}
+function daysLabel(d){if(d<=0)return'已過期！';if(d===1)return'今天到期';if(d===2)return'明天到期';if(d<30)return d+' 天後到期';const m=Math.floor(d/30),r=d%30;return r===0?m+' 個月後':'約 '+m+' 個月後';}
+function renderList(){
+  const list=document.getElementById('foodList');
+  let items=foods.filter(f=>{const d=daysLeft(f.expiresAt);if(d<=0)return false;if(currentTab==='all')return true;return f.cat===currentTab;}).sort((a,b)=>a.expiresAt-b.expiresAt);
+  if(!items.length){list.innerHTML='<div class="empty-state"><div class="empty-icon">🫙</div>目前沒有食材</div>';return;}
+  list.innerHTML=items.map(f=>{const d=daysLeft(f.expiresAt),sc=statusClass(d),cat=CATS[f.cat]||CATS.other;
+    return`<div class="food-item ${sc}"><div class="food-icon">${cat.emoji}</div><div class="food-info"><div class="food-name">${f.name}</div><div class="food-meta"><span class="food-cat">${cat.label}</span><span class="food-days ${sc}">${daysLabel(d)}</span></div></div><button class="food-delete" onclick="deleteFood('${f.id}')">✕</button></div>`;
+  }).join('');
+  updateUrgentCount();
+}
+function updateUrgentCount(){const n=foods.filter(f=>{const d=daysLeft(f.expiresAt);return d>0&&d<=3;}).length;document.getElementById('urgentCount').textContent=n;}
+function deleteFood(id){foods=foods.filter(f=>f.id!==id);save();renderList();}
+function filterTab(tab,el){currentTab=tab;document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderList();}
+function openAdd(){
+  selectedCat=null;selectedDays=null;calOpen=false;
+  document.getElementById('addOverlay').classList.add('show');
+  document.getElementById('foodNameInput').value='';
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('quickFoods').innerHTML='';
+  document.getElementById('dateInput').value='';
+  document.getElementById('dateInput').classList.remove('show');
+  document.getElementById('calToggle').classList.remove('active');
+  document.getElementById('calLabel').textContent='自訂日期';
+  document.getElementById('defaultHint').classList.remove('show');
+  document.getElementById('addConfirmBtn').disabled=true;
+}
+function closeOnBg(e,id){if(e.target===document.getElementById(id))document.getElementById(id).classList.remove('show');}
+function selectCat(el){
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');selectedCat=el.dataset.cat;
+  const cat=CATS[selectedCat];
+  document.getElementById('quickFoods').innerHTML=cat.quick.map(q=>`<button class="quick-chip" onclick="setQuickFood('${q}')">${q}</button>`).join('');
+  if(cat.defaultDays){
+    const hints={2:'熟食預設 2 天',7:'麵包預設 7 天',30:'冷凍預設 30 天'};
+    const hint=document.getElementById('defaultHint');
+    hint.textContent='✓ '+hints[cat.defaultDays]+'，可自行更改';hint.classList.add('show');
+    selectedDays=cat.defaultDays;
+    document.querySelectorAll('.day-btn').forEach(b=>b.classList.toggle('active',parseInt(b.dataset.days)===cat.defaultDays));
+    document.getElementById('dateInput').classList.remove('show');
+    document.getElementById('calToggle').classList.remove('active');
+    document.getElementById('calLabel').textContent='自訂日期';
+  } else {document.getElementById('defaultHint').classList.remove('show');}
+  checkReady();
+}
+function setQuickFood(name){document.getElementById('foodNameInput').value=name;checkReady();}
+function selectDays(el){
+  document.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');selectedDays=parseInt(el.dataset.days);
+  document.getElementById('dateInput').value='';
+  document.getElementById('dateInput').classList.remove('show');
+  document.getElementById('calToggle').classList.remove('active');
+  document.getElementById('calLabel').textContent='自訂日期';
+  calOpen=false;checkReady();
+}
+function toggleCal(){
+  calOpen=!calOpen;
+  const inp=document.getElementById('dateInput'),tog=document.getElementById('calToggle');
+  if(calOpen){inp.classList.add('show');tog.classList.add('active');inp.min=new Date().toISOString().split('T')[0];setTimeout(()=>inp.focus(),50);}
+  else{inp.classList.remove('show');tog.classList.remove('active');document.getElementById('calLabel').textContent='自訂日期';}
+}
+function selectDate(){
+  const val=document.getElementById('dateInput').value;if(!val)return;
+  const d=Math.ceil((new Date(val+'T23:59:59')-Date.now())/86400000);
+  if(d<=0){alert('請選擇今天以後的日期');return;}
+  selectedDays=d;
+  document.querySelectorAll('.day-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('calLabel').textContent='📅 '+val.replace(/-/g,'/')+' 到期';
+  checkReady();
+}
+function checkReady(){const name=document.getElementById('foodNameInput').value.trim();document.getElementById('addConfirmBtn').disabled=!(selectedCat&&selectedDays&&name);}
+function addFood(){
+  const name=document.getElementById('foodNameInput').value.trim();
+  if(!name||!selectedCat||!selectedDays)return;
+  foods.push({id:Date.now().toString(),name,cat:selectedCat,expiresAt:Date.now()+selectedDays*86400000});
+  save();renderList();document.getElementById('addOverlay').classList.remove('show');
+}
+function openSummary(){
+  const list=document.getElementById('summaryList');
+  const urgent=foods.filter(f=>{const d=daysLeft(f.expiresAt);return d>0&&d<=3;}).sort((a,b)=>a.expiresAt-b.expiresAt);
+  if(!urgent.length){list.innerHTML='<div class="empty-state" style="padding:30px 0"><div class="empty-icon">✅</div>目前沒有即將到期的食材！</div>';
+  }else{list.innerHTML=urgent.map(f=>{const d=daysLeft(f.expiresAt),cat=CATS[f.cat]||CATS.other,bc=d<=1?'badge-urgent':'badge-warn';
+    return`<div class="summary-item"><span style="font-size:22px">${cat.emoji}</span><div style="flex:1"><div style="font-weight:500;font-size:15px">${f.name}</div><div style="font-size:12px;color:var(--text2)">${cat.label}</div></div><span class="summary-days-badge ${bc}">${daysLabel(d)}</span></div>`;
+  }).join('');}
+  document.getElementById('summaryOverlay').classList.add('show');
+}
+renderList();
+</script>
+</body>
+</html>
